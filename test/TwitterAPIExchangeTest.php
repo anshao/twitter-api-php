@@ -335,4 +335,14 @@ class TwitterAPIExchangeTest extends \PHPUnit_Framework_TestCase
 
         $this->assertContains('UNAUTHORIZED_CLIENT_APPLICATION', $data);
     }
+
+    public function testBearerToken()
+    {
+        $url = 'https://api.twitter.com/1.1/users/lookup.json';
+        $query_params = "user_id=3232926711";
+        $method = 'GET';
+        $data = $this->exchange->clearField()->setPostfields(array('grant_type'=>'client_credentials'))->buildBearerToken($url, $method)->clearField()->setGetfield($query_params)->performBearerTokenRequest();
+        $data = json_decode($data, true);
+        $this->assertContains('created_at', $data);
+    }
 }

@@ -67,6 +67,13 @@ class TwitterAPIExchange
     protected $httpStatusCode;
 
     /**
+     * bearer_token
+     *
+     * @var string
+     */
+    protected $bearer_token;
+
+    /**
      * Create the API access object. Requires an array of settings::
      * oauth access token, oauth access token secret, consumer key, consumer secret
      * These are all available by creating your own application on dev.twitter.com
@@ -406,5 +413,144 @@ class TwitterAPIExchange
     public function getHttpStatusCode()
     {
         return $this->httpStatusCode;
+    }
+
+    /**
+     * Build Bearer Token
+     *
+     * @param string $url
+     * @param string $requestMethod
+     * @return void
+     */
+    public function buildBearerToken($url, $requestMethod)
+    {
+        if (!in_array(strtolower($requestMethod), array('post', 'get', 'put', 'delete'))) {
+            throw new Exception('Request method must be either POST, GET or PUT or DELETE');
+        }
+
+        $consumer_key = $this->consumer_key;
+        $consumer_secret = $this->consumer_secret;
+
+        // $header = array($this->buildBasicHeader($basic));
+        $oauth2_url = 'https://api.twitter.com/oauth2/token';
+
+        $getfield = $this->getGetfield();
+        $postfields = $this->getPostfields();
+
+
+        $options = array(
+            // CURLOPT_HTTPHEADER => $header,
+            CURLOPT_HEADER => false,
+            CURLOPT_URL => $oauth2_url,
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_TIMEOUT => 10,
+            CURLOPT_POST => 1,
+            CURLOPT_HTTPAUTH => CURLAUTH_BASIC,
+            CURLOPT_USERPWD => "{$consumer_key}:{$consumer_secret}",
+        );
+
+        if (!is_null($postfields)) {
+            $options[CURLOPT_POSTFIELDS] = http_build_query($postfields, '', '&');
+        } else {
+            if ($getfield !== '') {
+                $options[CURLOPT_URL] .= $getfield;
+            }
+        }
+
+        $feed = curl_init();
+        curl_setopt_array($feed, $options);
+        $json = curl_exec($feed);
+
+        $this->httpStatusCode = curl_getinfo($feed, CURLINFO_HTTP_CODE);
+
+        if (($error = curl_error($feed)) !== '') {
+            curl_close($feed);
+
+            throw new \Exception($error);
+        }
+
+        curl_close($feed);
+
+        $json_ary = json_decode($json, 1);
+        $this->bearer_token = $json_ary['access_token'];
+        $this->requestMethod = $requestMethod;
+        $this->url = $url;
+        return $this;
+    }
+
+    /**
+     * Perform the actual data retrieval from the API using Bearer Token
+     *
+     * @param boolean $return
+     * @param array $curlOptions
+     * @return void
+     */
+    public function performBearerTokenRequest($return = true, $curlOptions = array())
+    {
+        if (!is_bool($return)) {
+            throw new Exception('performRequest parameter must be true or false');
+        }
+
+        $header = array('Authorization: Bearer '.$this->bearer_token);
+
+        $getfield = $this->getGetfield();
+        $postfields = $this->getPostfields();
+
+        if (in_array(strtolower($this->requestMethod), array('put', 'delete'))) {
+            $curlOptions[CURLOPT_CUSTOMREQUEST] = $this->requestMethod;
+        }
+
+        $options = $curlOptions + array(
+            CURLOPT_HTTPHEADER => $header,
+            CURLOPT_HEADER => false,
+            CURLOPT_URL => $this->url,
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_TIMEOUT => 10,
+        );
+
+        if (!is_null($postfields)) {
+            $options[CURLOPT_POSTFIELDS] = http_build_query($postfields, '', '&');
+        } else {
+            if ($getfield !== '') {
+                $options[CURLOPT_URL] .= $getfield;
+            }
+        }
+
+        $feed = curl_init();
+        curl_setopt_array($feed, $options);
+        $json = curl_exec($feed);
+
+        $this->httpStatusCode = curl_getinfo($feed, CURLINFO_HTTP_CODE);
+
+        if (($error = curl_error($feed)) !== '') {
+            curl_close($feed);
+
+            throw new \Exception($error);
+        }
+
+        curl_close($feed);
+
+        return $json;
+    }
+
+    /**
+     * Clear postfields and getfield
+     *
+     * @return $this
+     */
+    public function clearField()
+    {
+        unset($this->postfields, $this->getfield);
+        return $this;
+    }
+
+    /**
+     * Get Bearer Token
+     *
+     * @return $this->bearer_token
+     */
+    public function getBearerToken()
+    {
+        return $this->bearer_token;
     }
 }
